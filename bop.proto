@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+option go_package = "github.com/computerdane/bop";
+
+package bop;
+
+service Bop {
+  rpc List (ListRequest) returns (ListReply) {}
+}
+
+message ListRequest {
+  optional uint32 skip = 1;
+  optional uint32 limit = 2;
+  optional string search = 3;
+}
+
+message ListReply {
+  repeated string name = 1;
+}
