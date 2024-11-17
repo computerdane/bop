@@ -45,7 +45,7 @@ var rootCmd = &cobra.Command{
 		defer cancel()
 		reply, err := c.List(ctx, &request)
 		if err != nil {
-			Crash("could not greet: ", err)
+			Crash(err)
 		}
 
 		mpvPath, err := exec.LookPath("mpv")
@@ -53,7 +53,12 @@ var rootCmd = &cobra.Command{
 			Crash(err)
 		}
 
-		if err := syscall.Exec(mpvPath, append([]string{"mpv"}, reply.GetName()...), os.Environ()); err != nil {
+		names := reply.GetName()
+		if len(names) == 0 {
+			Crash("no results")
+		}
+
+		if err := syscall.Exec(mpvPath, append([]string{"mpv"}, names...), os.Environ()); err != nil {
 			Crash(err)
 		}
 	},
