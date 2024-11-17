@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path"
@@ -23,9 +24,10 @@ var (
 	cfgFile          string
 	shouldSaveConfig bool
 
-	host    string
-	mpvArgs string
-	port    int
+	host          string
+	mpvArgs       string
+	port          int
+	shouldShuffle bool
 )
 
 var rootCmd = &cobra.Command{
@@ -58,32 +60,38 @@ var rootCmd = &cobra.Command{
 			Crash("no results")
 		}
 
-		// group songs by directory, keeping ranking of dirs
-		groups := make(map[string]([]string))
-		dirs := []string{}
-		for _, name := range names {
-			dir := path.Dir(name)
-			if _, ok := groups[dir]; ok {
-				groups[dir] = append(groups[dir], name)
-			} else {
-				dirs = append(dirs, dir)
-				groups[dir] = []string{name}
+		if shouldShuffle {
+			rand.Shuffle(len(names), func(i, j int) {
+				names[i], names[j] = names[j], names[i]
+			})
+		} else {
+			// group songs by directory, keeping ranking of dirs
+			groups := make(map[string]([]string))
+			dirs := []string{}
+			for _, name := range names {
+				dir := path.Dir(name)
+				if _, ok := groups[dir]; ok {
+					groups[dir] = append(groups[dir], name)
+				} else {
+					dirs = append(dirs, dir)
+					groups[dir] = []string{name}
+				}
 			}
-		}
 
-		// sort songs within their directories (great for playing albums with numbered songs)
-		i := 0
-		for _, dir := range dirs {
-			group := groups[dir]
-			sort.Strings(group)
-			for _, name := range group {
-				names[i] = name
-				i++
+			// sort songs within their directories (great for playing albums with numbered songs)
+			i := 0
+			for _, dir := range dirs {
+				group := groups[dir]
+				sort.Strings(group)
+				for _, name := range group {
+					names[i] = name
+					i++
+				}
 			}
 		}
 
 		// launch mpv with urls
-		mpvArgsArray := append(strings.Split(mpvArgs, " "), reply.GetName()...)
+		mpvArgsArray := append(strings.Split(mpvArgs, " "), names...)
 		if err := exec.Command("mpv", mpvArgsArray...).Start(); err != nil {
 			Crash(err)
 		}
@@ -99,6 +107,7 @@ func init() {
 	lib.AddOption(rootCmd, lib.Option{P: &host, Name: "host", Shorthand: "H", Value: "localhost", Usage: "api host without port"})
 	lib.AddOption(rootCmd, lib.Option{P: &mpvArgs, Name: "mpv-args", Shorthand: "", Value: "--force-window --title=${filename}", Usage: "args to pass to mpv"})
 	lib.AddOption(rootCmd, lib.Option{P: &port, Name: "port", Shorthand: "P", Value: 8085, Usage: "api port"})
+	lib.AddOption(rootCmd, lib.Option{P: &shouldShuffle, Name: "shuffle", Shorthand: "s", Value: false, Usage: "shuffle songs"})
 }
 
 func initConfig() {

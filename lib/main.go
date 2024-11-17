@@ -29,6 +29,12 @@ func AddOption(cmd *cobra.Command, o Option) {
 		} else {
 			cmd.PersistentFlags().IntVarP(o.P.(*int), o.Name, o.Shorthand, o.Value.(int), o.Usage)
 		}
+	case bool:
+		if o.Shorthand == "" {
+			cmd.PersistentFlags().BoolVar(o.P.(*bool), o.Name, o.Value.(bool), o.Usage)
+		} else {
+			cmd.PersistentFlags().BoolVarP(o.P.(*bool), o.Name, o.Shorthand, o.Value.(bool), o.Usage)
+		}
 	default:
 		return
 	}
@@ -43,6 +49,8 @@ func LoadOptions() {
 			*o.P.(*string) = viper.GetString(o.Name)
 		case int:
 			*o.P.(*int) = viper.GetInt(o.Name)
+		case bool:
+			*o.P.(*bool) = viper.GetBool(o.Name)
 		}
 	}
 }
