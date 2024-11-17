@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math/rand"
@@ -27,6 +28,8 @@ var (
 	host          string
 	mpvArgs       string
 	port          int
+	isInteractive bool
+	shouldList    bool
 	shouldShuffle bool
 )
 
@@ -39,6 +42,8 @@ var rootCmd = &cobra.Command{
 			return
 		}
 
+		search := strings.Join(args, " ")
+
 		// connect to grpc
 		conn, err := grpc.NewClient(fmt.Sprintf("%s:%d", host, port), grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
@@ -50,7 +55,6 @@ var rootCmd = &cobra.Command{
 		// list urls based on search
 		request := bop.ListRequest{}
 		if len(args) > 0 {
-			search := strings.Join(args, " ")
 			request.Search = &search
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -94,10 +98,62 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		// launch mpv with urls
-		mpvArgsArray := append(strings.Split(mpvArgs, " "), names...)
-		if err := exec.Command("mpv", mpvArgsArray...).Start(); err != nil {
-			Crash(err)
+		if isInteractive {
+			// start fzf
+			fzfArgs := []string{"--multi"}
+			if search != "" {
+				fzfArgs = append(fzfArgs, "-q")
+				fzfArgs = append(fzfArgs, search)
+			}
+			fzf := exec.Command("fzf", fzfArgs...)
+
+			// create pipes
+			stdout := bytes.NewBuffer([]byte{})
+			fzf.Stdout = stdout
+			stdin, err := fzf.StdinPipe()
+			if err != nil {
+				Crash(err)
+			}
+			fzf.Stderr = os.Stderr
+
+			// print one line to make fzf recognize its getting input from stdin
+			fmt.Fprintf(stdin, "%s\n", names[0])
+
+			// start fzf
+			if err := fzf.Start(); err != nil {
+				Crash(err)
+			}
+
+			// print the rest of the results to stdin for fzf
+			if len(names) > 1 {
+				for _, name := range names[1:] {
+					fmt.Fprintf(stdin, "%s\n", name)
+				}
+			}
+			stdin.Close()
+
+			// wait for fzf to close
+			if err := fzf.Wait(); err != nil {
+				Crash(err)
+			}
+
+			// replace names array with results from fzf
+			names = []string{}
+			for _, line := range strings.Split(stdout.String(), "\n") {
+				names = append(names, line)
+			}
+		}
+
+		if shouldList {
+			for _, name := range names {
+				fmt.Println(name)
+			}
+		} else {
+			// launch mpv with urls
+			mpvArgsArray := append(strings.Split(mpvArgs, " "), names...)
+			if err := exec.Command("mpv", mpvArgsArray...).Start(); err != nil {
+				Crash(err)
+			}
 		}
 	},
 }
@@ -111,6 +167,8 @@ func init() {
 	lib.AddOption(rootCmd, lib.Option{P: &host, Name: "host", Shorthand: "H", Value: "localhost", Usage: "api host without port"})
 	lib.AddOption(rootCmd, lib.Option{P: &mpvArgs, Name: "mpv-args", Shorthand: "", Value: "--force-window --title=${filename}", Usage: "args to pass to mpv"})
 	lib.AddOption(rootCmd, lib.Option{P: &port, Name: "port", Shorthand: "P", Value: 8085, Usage: "api port"})
+	lib.AddOption(rootCmd, lib.Option{P: &isInteractive, Name: "interactive", Shorthand: "i", Value: false, Usage: "use fzf to find a song and play it"})
+	lib.AddOption(rootCmd, lib.Option{P: &shouldList, Name: "list", Shorthand: "l", Value: false, Usage: "list songs, do not play"})
 	lib.AddOption(rootCmd, lib.Option{P: &shouldShuffle, Name: "shuffle", Shorthand: "s", Value: false, Usage: "shuffle songs"})
 }
 
@@ -134,6 +192,10 @@ func initConfig() {
 
 	if shouldSaveConfig {
 		genConfig()
+	}
+
+	if isInteractive && shouldList {
+		Crash("--interactive cannot be used with --list")
 	}
 }
 

@@ -20,6 +20,7 @@
             with pkgs;
             [
               buf-language-server
+              fzf
               git
               go
               gopls
