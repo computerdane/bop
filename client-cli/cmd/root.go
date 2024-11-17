@@ -8,10 +8,10 @@ import (
 	"path"
 	"sort"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/computerdane/bop/bop"
+	"github.com/computerdane/bop/lib"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -21,39 +21,37 @@ import (
 
 var (
 	cfgFile string
-	addr    string
+
+	host    string
+	mpvArgs string
+	port    int
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "bop [search]",
 	Short: "Bop your songs",
+
 	Run: func(cmd *cobra.Command, args []string) {
-		conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		// connect to grpc
+		conn, err := grpc.NewClient(fmt.Sprintf("%s:%d", host, port), grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			Crash("did not connect: ", err)
 		}
 		defer conn.Close()
-		c := bop.NewBopClient(conn)
+		client := bop.NewBopClient(conn)
 
+		// list urls based on search
 		request := bop.ListRequest{}
 		if len(args) > 0 {
 			search := strings.Join(args, " ")
 			request.Search = &search
 		}
-
-		// Contact the server and print out its response.
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		reply, err := c.List(ctx, &request)
+		reply, err := client.List(ctx, &request)
 		if err != nil {
 			Crash(err)
 		}
-
-		mpvPath, err := exec.LookPath("mpv")
-		if err != nil {
-			Crash(err)
-		}
-
 		names := reply.GetName()
 		if len(names) == 0 {
 			Crash("no results")
@@ -83,7 +81,9 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		if err := syscall.Exec(mpvPath, append([]string{"mpv"}, names...), os.Environ()); err != nil {
+		// launch mpv with urls
+		mpvArgsArray := append(strings.Split(mpvArgs, " "), reply.GetName()...)
+		if err := exec.Command("mpv", mpvArgsArray...).Start(); err != nil {
 			Crash(err)
 		}
 	},
@@ -93,37 +93,38 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.config/bop/config.yaml)")
-	rootCmd.PersistentFlags().StringVar(&addr, "addr", "localhost:8085", "addr of api")
 
-	viper.BindPFlag("addr", rootCmd.PersistentFlags().Lookup("addr"))
+	lib.AddOption(rootCmd, lib.Option{P: &host, Name: "host", Shorthand: "H", Value: "localhost", Usage: "api host without port"})
+	lib.AddOption(rootCmd, lib.Option{P: &mpvArgs, Name: "mpv-args", Shorthand: "", Value: "--force-window", Usage: "args to pass to mpv"})
+	lib.AddOption(rootCmd, lib.Option{P: &port, Name: "port", Shorthand: "P", Value: 8085, Usage: "api port"})
 }
 
 func initConfig() {
-	if cfgFile != "" {
-		viper.SetConfigFile(cfgFile)
-	} else {
+	if cfgFile == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			Crash(err)
 		}
 		cfgFile = home + "/.config/bop/config.yaml"
-		viper.SetConfigFile(cfgFile)
+	}
+	viper.SetConfigFile(cfgFile)
+
+	// try to generate config file
+	if _, err := os.Stat(cfgFile); err != nil {
+		cfgFileDir := path.Dir(cfgFile)
+		if err := os.MkdirAll(cfgFileDir, os.ModePerm); err != nil {
+			Warn("failed to make config directory: ", err)
+		}
+		if _, err := os.OpenFile(cfgFile, os.O_CREATE|os.O_RDONLY, 0600); err != nil {
+			Warn("failed to create config file: ", err)
+		}
+		if err := viper.WriteConfig(); err != nil {
+			Warn("failed to generate config: ", err)
+		}
 	}
 
 	if err := viper.ReadInConfig(); err == nil {
-		addr = viper.GetString("addr")
-	}
-
-	// try to generate config file
-	cfgFileDir := path.Dir(cfgFile)
-	if err := os.MkdirAll(cfgFileDir, os.ModePerm); err != nil {
-		Warn("failed to make config directory: ", err)
-	}
-	if _, err := os.OpenFile(cfgFile, os.O_CREATE|os.O_RDONLY, 0600); err != nil {
-		Warn("failed to create config file: ", err)
-	}
-	if err := viper.WriteConfig(); err != nil {
-		Warn("failed to generate config: ", err)
+		lib.LoadOptions()
 	}
 }
 
