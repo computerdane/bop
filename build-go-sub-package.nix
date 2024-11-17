@@ -26,5 +26,5 @@ buildGoModule {
         --fish <(${emulator} $out/bin/${pname} completion fish) \
         --zsh  <(${emulator} $out/bin/${pname} completion zsh)
     '';
-  vendorHash = "sha256-qsQk3fU4KNIhVj/qpfuYrg9LDTFh+PUaOZNrLXSTbDo=";
+  vendorHash = "sha256-1ZiskvF401IQ9qzNHCJG2F3TohNxl3+zEv+cU1kbBWo=";
 }

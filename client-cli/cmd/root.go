@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 	"syscall"
 	"time"
 
@@ -23,7 +24,7 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "bop [dir]",
+	Use:   "bop [search]",
 	Short: "Bop your songs",
 	Run: func(cmd *cobra.Command, args []string) {
 		conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -33,10 +34,16 @@ var rootCmd = &cobra.Command{
 		defer conn.Close()
 		c := bop.NewBopClient(conn)
 
+		request := bop.ListRequest{}
+		if len(args) > 0 {
+			search := strings.Join(args, " ")
+			request.Search = &search
+		}
+
 		// Contact the server and print out its response.
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		r, err := c.List(ctx, &bop.ListRequest{})
+		reply, err := c.List(ctx, &request)
 		if err != nil {
 			Crash("could not greet: ", err)
 		}
@@ -46,7 +53,7 @@ var rootCmd = &cobra.Command{
 			Crash(err)
 		}
 
-		if err := syscall.Exec(mpvPath, r.GetName(), os.Environ()); err != nil {
+		if err := syscall.Exec(mpvPath, append([]string{"mpv"}, reply.GetName()...), os.Environ()); err != nil {
 			Crash(err)
 		}
 	},

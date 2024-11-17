@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/computerdane/bop/bop"
+	"github.com/lithammer/fuzzysearch/fuzzy"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 )
@@ -28,9 +29,13 @@ type server struct {
 
 func (s *server) List(_ context.Context, in *bop.ListRequest) (*bop.ListReply, error) {
 	var names []string
+	search := in.GetSearch()
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		path = strings.Replace(path, dir+"/", "", 1)
 		if err == nil && !d.IsDir() {
-			names = append(names, baseUrl+strings.Replace(path, dir+"/", "", 1))
+			if search == "" || fuzzy.Match(search, path) {
+				names = append(names, baseUrl+path)
+			}
 		}
 		return nil
 	})
