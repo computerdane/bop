@@ -8,12 +8,15 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/computerdane/bop/bop"
 	"github.com/lithammer/fuzzysearch/fuzzy"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -29,20 +32,23 @@ type server struct {
 
 func (s *server) List(_ context.Context, in *bop.ListRequest) (*bop.ListReply, error) {
 	var names []string
-	search := in.GetSearch()
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		path = strings.Replace(path, dir+"/", "", 1)
 		if err == nil && !d.IsDir() {
-			if search == "" || fuzzy.Match(search, path) {
-				names = append(names, baseUrl+path)
-			}
+			names = append(names, path)
 		}
 		return nil
 	})
 	if err != nil {
-		log.Fatal(err)
+		return nil, status.Error(codes.Internal, "walking directory tree failed")
 	}
-	return &bop.ListReply{Name: names}, nil
+	matches := fuzzy.RankFindNormalizedFold(strings.ToLower(in.GetSearch()), names)
+	sort.Reverse(matches)
+	urls := make([]string, len(matches))
+	for i, match := range matches {
+		urls[i] = baseUrl + match.Target
+	}
+	return &bop.ListReply{Name: urls}, nil
 }
 
 var rootCmd = &cobra.Command{
