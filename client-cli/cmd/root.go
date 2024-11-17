@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -56,6 +57,30 @@ var rootCmd = &cobra.Command{
 		names := reply.GetName()
 		if len(names) == 0 {
 			Crash("no results")
+		}
+
+		// group songs by directory, keeping ranking of dirs
+		groups := make(map[string]([]string))
+		dirs := []string{}
+		for _, name := range names {
+			dir := path.Dir(name)
+			if _, ok := groups[dir]; ok {
+				groups[dir] = append(groups[dir], name)
+			} else {
+				dirs = append(dirs, dir)
+				groups[dir] = []string{name}
+			}
+		}
+
+		// sort songs within their directories (great for playing albums with numbered songs)
+		i := 0
+		for _, dir := range dirs {
+			group := groups[dir]
+			sort.Strings(group)
+			for _, name := range group {
+				names[i] = name
+				i++
+			}
 		}
 
 		if err := syscall.Exec(mpvPath, append([]string{"mpv"}, names...), os.Environ()); err != nil {
