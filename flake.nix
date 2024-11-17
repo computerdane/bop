@@ -30,7 +30,9 @@
             ]
           );
         };
-        packages = pkgs-bop;
+        packages = pkgs-bop // {
+          default = pkgs-bop.client-cli;
+        };
       }
     );
 }
