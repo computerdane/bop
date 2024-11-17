@@ -35,6 +35,10 @@ var rootCmd = &cobra.Command{
 	Short: "Bop your songs",
 
 	Run: func(cmd *cobra.Command, args []string) {
+		if shouldSaveConfig {
+			return
+		}
+
 		// connect to grpc
 		conn, err := grpc.NewClient(fmt.Sprintf("%s:%d", host, port), grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
