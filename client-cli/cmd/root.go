@@ -20,7 +20,8 @@ import (
 )
 
 var (
-	cfgFile string
+	cfgFile          string
+	shouldSaveConfig bool
 
 	host    string
 	mpvArgs string
@@ -93,9 +94,10 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.config/bop/config.yaml)")
+	rootCmd.PersistentFlags().BoolVar(&shouldSaveConfig, "save-config", false, "save to the config file with the provided flags")
 
 	lib.AddOption(rootCmd, lib.Option{P: &host, Name: "host", Shorthand: "H", Value: "localhost", Usage: "api host without port"})
-	lib.AddOption(rootCmd, lib.Option{P: &mpvArgs, Name: "mpv-args", Shorthand: "", Value: "--force-window", Usage: "args to pass to mpv"})
+	lib.AddOption(rootCmd, lib.Option{P: &mpvArgs, Name: "mpv-args", Shorthand: "", Value: "--force-window --title=${filename}", Usage: "args to pass to mpv"})
 	lib.AddOption(rootCmd, lib.Option{P: &port, Name: "port", Shorthand: "P", Value: 8085, Usage: "api port"})
 }
 
@@ -109,22 +111,29 @@ func initConfig() {
 	}
 	viper.SetConfigFile(cfgFile)
 
-	// try to generate config file
 	if _, err := os.Stat(cfgFile); err != nil {
-		cfgFileDir := path.Dir(cfgFile)
-		if err := os.MkdirAll(cfgFileDir, os.ModePerm); err != nil {
-			Warn("failed to make config directory: ", err)
-		}
-		if _, err := os.OpenFile(cfgFile, os.O_CREATE|os.O_RDONLY, 0600); err != nil {
-			Warn("failed to create config file: ", err)
-		}
-		if err := viper.WriteConfig(); err != nil {
-			Warn("failed to generate config: ", err)
-		}
+		genConfig()
 	}
 
 	if err := viper.ReadInConfig(); err == nil {
 		lib.LoadOptions()
+	}
+
+	if shouldSaveConfig {
+		genConfig()
+	}
+}
+
+func genConfig() {
+	cfgFileDir := path.Dir(cfgFile)
+	if err := os.MkdirAll(cfgFileDir, os.ModePerm); err != nil {
+		Warn("failed to make config directory: ", err)
+	}
+	if _, err := os.OpenFile(cfgFile, os.O_CREATE|os.O_RDONLY, 0600); err != nil {
+		Warn("failed to create config file: ", err)
+	}
+	if err := viper.WriteConfig(); err != nil {
+		Warn("failed to generate config: ", err)
 	}
 }
 
