@@ -43,7 +43,7 @@ func (s *server) List(_ context.Context, in *bop.ListRequest) (*bop.ListReply, e
 		return nil, status.Error(codes.Internal, "walking directory tree failed")
 	}
 	matches := fuzzy.RankFindNormalizedFold(strings.ToLower(in.GetSearch()), names)
-	sort.Reverse(matches)
+	sort.Sort(matches)
 	urls := make([]string, len(matches))
 	for i, match := range matches {
 		urls[i] = baseUrl + match.Target
