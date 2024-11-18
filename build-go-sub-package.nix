@@ -1,6 +1,5 @@
 {
   buildGoModule,
-  buildInputs ? [ ],
   buildPackages,
   installShellFiles,
   pname,
@@ -10,7 +9,7 @@
 }:
 
 buildGoModule {
-  inherit pname version buildInputs;
+  inherit pname version;
   src = ./.;
   subPackages = [ subPackage ];
   nativeBuildInputs = [ installShellFiles ];

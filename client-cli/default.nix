@@ -1,8 +1,35 @@
-{ callPackage, mpv }:
+{
+  callPackage,
+  fzf,
+  lib,
+  makeBinaryWrapper,
+  mpv,
+  stdenv,
+}:
 
-callPackage ../build-go-sub-package.nix {
-  subPackage = "client-cli";
+let
+  base = callPackage ../build-go-sub-package.nix {
+    subPackage = "client-cli";
+    pname = "bop";
+    version = "0.0.1";
+  };
+in
+stdenv.mkDerivation {
   pname = "bop";
   version = "0.0.1";
-  buildInputs = [ mpv ];
+  nativeBuildInputs = [
+    base
+    makeBinaryWrapper
+  ];
+  dontUnpack = true;
+  installPhase = ''
+    mkdir -p $out/bin
+    makeBinaryWrapper ${base}/bin/bop $out/bin/bop \
+      --prefix PATH : ${
+        lib.makeBinPath [
+          mpv
+          fzf
+        ]
+      }
+  '';
 }
