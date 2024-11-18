@@ -31,6 +31,7 @@ var (
 	isInteractive bool
 	shouldList    bool
 	shouldShuffle bool
+	timeout       time.Duration
 )
 
 var rootCmd = &cobra.Command{
@@ -57,7 +58,7 @@ var rootCmd = &cobra.Command{
 		if len(args) > 0 {
 			request.Search = &search
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 		reply, err := client.List(ctx, &request)
 		if err != nil {
@@ -170,6 +171,7 @@ func init() {
 	lib.AddOption(rootCmd, lib.Option{P: &isInteractive, Name: "interactive", Shorthand: "i", Value: false, Usage: "use fzf to find a song and play it"})
 	lib.AddOption(rootCmd, lib.Option{P: &shouldList, Name: "list", Shorthand: "l", Value: false, Usage: "list songs, do not play"})
 	lib.AddOption(rootCmd, lib.Option{P: &shouldShuffle, Name: "shuffle", Shorthand: "s", Value: false, Usage: "shuffle songs"})
+	lib.AddOption(rootCmd, lib.Option{P: &timeout, Name: "timeout", Shorthand: "", Value: 3 * time.Second, Usage: "set timeout on grpc calls"})
 }
 
 func initConfig() {

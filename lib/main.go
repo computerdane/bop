@@ -1,6 +1,8 @@
 package lib
 
 import (
+	"time"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -35,6 +37,12 @@ func AddOption(cmd *cobra.Command, o Option) {
 		} else {
 			cmd.PersistentFlags().BoolVarP(o.P.(*bool), o.Name, o.Shorthand, o.Value.(bool), o.Usage)
 		}
+	case time.Duration:
+		if o.Shorthand == "" {
+			cmd.PersistentFlags().DurationVar(o.P.(*time.Duration), o.Name, o.Value.(time.Duration), o.Usage)
+		} else {
+			cmd.PersistentFlags().DurationVarP(o.P.(*time.Duration), o.Name, o.Shorthand, o.Value.(time.Duration), o.Usage)
+		}
 	default:
 		return
 	}
@@ -51,6 +59,8 @@ func LoadOptions() {
 			*o.P.(*int) = viper.GetInt(o.Name)
 		case bool:
 			*o.P.(*bool) = viper.GetBool(o.Name)
+		case time.Duration:
+			*o.P.(*time.Duration) = viper.GetDuration(o.Name)
 		}
 	}
 }
