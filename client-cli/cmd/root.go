@@ -166,7 +166,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&shouldSaveConfig, "save-config", false, "save to the config file with the provided flags")
 
 	lib.AddOption(rootCmd, lib.Option{P: &host, Name: "host", Shorthand: "H", Value: "localhost", Usage: "api host without port"})
-	lib.AddOption(rootCmd, lib.Option{P: &mpvArgs, Name: "mpv-args", Shorthand: "", Value: "--force-window --title=${filename}", Usage: "args to pass to mpv"})
+	lib.AddOption(rootCmd, lib.Option{P: &mpvArgs, Name: "mpv-args", Shorthand: "", Value: "--force-window --title=${filename} --script-opts-append=osc-visibility=always", Usage: "args to pass to mpv"})
 	lib.AddOption(rootCmd, lib.Option{P: &port, Name: "port", Shorthand: "P", Value: 8085, Usage: "api port"})
 	lib.AddOption(rootCmd, lib.Option{P: &isInteractive, Name: "interactive", Shorthand: "i", Value: false, Usage: "use fzf to find a song and play it"})
 	lib.AddOption(rootCmd, lib.Option{P: &shouldList, Name: "list", Shorthand: "l", Value: false, Usage: "list songs, do not play"})
