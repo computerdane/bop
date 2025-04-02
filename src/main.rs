@@ -1,6 +1,7 @@
 use std::{env, process::Command};
 
 use cliconf::{Flag, FlagValue, Flags};
+use rand::{rng, seq::SliceRandom};
 
 fn init_flags<'a>() -> Flags<'a> {
     let mut flags = Flags::new();
@@ -94,6 +95,9 @@ fn main() {
         }
     } else {
         paths.push(path.to_string());
+    }
+    if *flags.get_bool("shuffle") {
+        paths.shuffle(&mut rng());
     }
     let paths = paths;
 

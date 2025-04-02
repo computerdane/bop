@@ -1,7 +1,8 @@
 [package]
 name = "bop"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 [dependencies]
 cliconf = "0.1.2"
+rand = "0.9.0"
