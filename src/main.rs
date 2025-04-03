@@ -1,10 +1,17 @@
-use std::{env, process::Command};
+use std::{env, io, process::Command};
 
-use cliconf::{Flag, FlagValue, Flags};
+use cliconf::{usage, Flag, FlagValue, Flags};
 use rand::{rng, seq::SliceRandom};
 
 fn init_flags<'a>() -> Flags<'a> {
     let mut flags = Flags::new();
+    flags.add(Flag {
+        name: "help",
+        shorthand: None,
+        default_value: FlagValue::Bool(false),
+        description: None,
+    });
+    flags.exclude_flag_from_usage("help");
     flags.add(Flag {
         name: "host",
         shorthand: Some('h'),
@@ -53,6 +60,15 @@ fn init_flags<'a>() -> Flags<'a> {
 
 fn main() {
     let flags = init_flags();
+
+    if *flags.get_bool("help") {
+        let width = match term_size::dimensions() {
+            Some((w, _)) => w,
+            None => 75,
+        };
+        usage::generate(&flags, width, &mut io::stdout()).expect("Failed to print usage");
+        return;
+    }
 
     let album = flags.get_bool("album");
     let command = match album {
