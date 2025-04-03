@@ -3,51 +3,39 @@ use std::{env, io, process::Command};
 use cliconf::{usage, Flag, FlagValue, Flags};
 use rand::{rng, seq::SliceRandom};
 
-fn init_flags<'a>() -> Flags<'a> {
+fn init_flags() -> Flags {
     let mut flags = Flags::new();
-    flags.add(Flag {
-        name: "help",
-        shorthand: None,
-        default_value: FlagValue::Bool(false),
-        description: None,
-    });
-    flags.exclude_flag_from_usage("help");
-    flags.add(Flag {
-        name: "host",
-        shorthand: Some('h'),
-        default_value: FlagValue::String("localhost".to_string()),
-        description: Some("The SSH host you want to connect to."),
-    });
-    flags.add(Flag {
-        name: "dir",
-        shorthand: Some('d'),
-        default_value: FlagValue::String("/srv".to_string()),
-        description: Some("The directory to scan for files."),
-    });
-    flags.add(Flag {
-        name: "resume",
-        shorthand: Some('r'),
-        default_value: FlagValue::Bool(false),
-        description: Some("If true, will enable resuming playback."),
-    });
-    flags.add(Flag {
-        name: "background",
-        shorthand: Some('b'),
-        default_value: FlagValue::Bool(false),
-        description: Some("If true, will run mpv as a background process."),
-    });
-    flags.add(Flag {
-        name: "album",
-        shorthand: Some('a'),
-        default_value: FlagValue::Bool(false),
-        description: Some("If true, will look for media folders and play files from the selected folder in alphabetical order."),
-    });
-    flags.add(Flag {
-        name: "shuffle",
-        shorthand: Some('s'),
-        default_value: FlagValue::Bool(false),
-        description: Some("If true, will shuffle an album. Only works when --album is true."),
-    });
+    flags.add(Flag::new("help", FlagValue::Bool(false)).exclude_from_usage());
+    flags.add(
+        Flag::new("host", FlagValue::String("localhost".into()))
+            .shorthand('h')
+            .description("The SSH host you want to connect to."),
+    );
+    flags.add(
+        Flag::new("dir", FlagValue::String("/srv".into()))
+            .shorthand('d')
+            .description("The directory to scan for files."),
+    );
+    flags.add(
+        Flag::new("resume", FlagValue::Bool(false))
+            .shorthand('r')
+            .description("If true, will enable resuming playback."),
+    );
+    flags.add(
+        Flag::new("background", FlagValue::Bool(false))
+            .shorthand('b')
+            .description("If true, will run mpv as a background process."),
+    );
+    flags.add(
+        Flag::new("album", FlagValue::Bool(false))
+            .shorthand('a')
+            .description("If true, will look for media folders and play files from the selected folder in alphabetical order."),
+    );
+    flags.add(
+        Flag::new("shuffle", FlagValue::Bool(false))
+            .shorthand('s')
+            .description("If true, will shuffle an album. Only works with the --album flag."),
+    );
     flags.add_home_config_file(".config/bop/config.json");
     flags
         .load(
@@ -61,7 +49,7 @@ fn init_flags<'a>() -> Flags<'a> {
 fn main() {
     let flags = init_flags();
 
-    if *flags.get_bool("help") {
+    if flags.get_bool("help") {
         let width = match term_size::dimensions() {
             Some((w, _)) => w,
             None => 75,
@@ -81,13 +69,13 @@ fn main() {
 
     // Use fzf to locate a file
     Command::new("ssh")
-        .args(["-t", host, &format!("cd {dir} && {command} > /tmp/bop")])
+        .args(["-t", &host, &format!("cd {dir} && {command} > /tmp/bop")])
         .status()
         .expect("SSH command failed");
 
     // Retrieve the located file
     let output = Command::new("ssh")
-        .args([host, "cat /tmp/bop"])
+        .args([&host, "cat /tmp/bop"])
         .output()
         .expect("SSH command failed");
     let path = match output.status.success() {
@@ -96,10 +84,10 @@ fn main() {
     };
 
     let mut paths = vec![];
-    if *album {
+    if album {
         // List the file paths in an album
         let output = Command::new("ssh")
-            .args([host, &format!("ls \"{dir}/{path}\"")])
+            .args([&host, &format!("ls \"{dir}/{path}\"")])
             .output()
             .expect("SSH command failed");
         let path_list = match output.status.success() {
@@ -112,7 +100,7 @@ fn main() {
     } else {
         paths.push(path.to_string());
     }
-    if *flags.get_bool("shuffle") {
+    if flags.get_bool("shuffle") {
         paths.shuffle(&mut rng());
     }
     let paths = paths;
@@ -127,7 +115,7 @@ fn main() {
     });
     let mpv_args = mpv_args;
 
-    if *flags.get_bool("background") {
+    if flags.get_bool("background") {
         Command::new("mpv")
             .args(mpv_args)
             .spawn()
