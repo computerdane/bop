@@ -1,14 +1,23 @@
 use std::{env, io, process::Command};
 
-use cliconf::{usage, Flag, FlagValue, Flags};
+use cliconf::{Flag, FlagValue, Flags};
 use rand::{rng, seq::SliceRandom};
 
 fn init_flags() -> Flags {
     let mut flags = Flags::new();
-    flags.add(Flag::new("help", FlagValue::Bool(false)).exclude_from_usage());
+    flags.add(
+        Flag::new("help", FlagValue::Bool(false))
+            .shorthand('h')
+            .exclude_from_usage(),
+    );
+    flags.add(
+        Flag::new("version", FlagValue::Bool(false))
+            .shorthand('v')
+            .description("Output the current version of bop."),
+    );
     flags.add(
         Flag::new("host", FlagValue::String("localhost".into()))
-            .shorthand('h')
+            .shorthand('H')
             .description("The SSH host you want to connect to."),
     );
     flags.add(
@@ -22,9 +31,9 @@ fn init_flags() -> Flags {
             .description("If true, will enable resuming playback."),
     );
     flags.add(
-        Flag::new("background", FlagValue::Bool(false))
-            .shorthand('b')
-            .description("If true, will run mpv as a background process."),
+        Flag::new("disown", FlagValue::Bool(false))
+            .shorthand('D')
+            .description("If true, will run mpv and detach it from the current process."),
     );
     flags.add(
         Flag::new("album", FlagValue::Bool(false))
@@ -49,12 +58,18 @@ fn init_flags() -> Flags {
 fn main() {
     let flags = init_flags();
 
+    if flags.get_bool("version") {
+        let version = env!("CARGO_PKG_VERSION");
+        println!("bop {version}");
+        return;
+    }
+
     if flags.get_bool("help") {
         let width = match term_size::dimensions() {
             Some((w, _)) => w,
             None => 75,
         };
-        usage::generate(&flags, width, &mut io::stdout()).expect("Failed to print usage");
+        cliconf::usage::generate(&flags, width, &mut io::stdout()).expect("Failed to print usage");
         return;
     }
 
@@ -115,7 +130,7 @@ fn main() {
     });
     let mpv_args = mpv_args;
 
-    if flags.get_bool("background") {
+    if flags.get_bool("disown") {
         Command::new("mpv")
             .args(mpv_args)
             .spawn()
