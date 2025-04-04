@@ -1,96 +1,124 @@
-use std::{env, io, process::Command};
-
-use cliconf::{Flag, FlagValue, Flags};
+use cliconf::Parse;
 use rand::{rng, seq::SliceRandom};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde_json::Value;
+use std::{env, fs::File, io::Read, process::Command};
 
-fn init_flags() -> Flags {
-    let mut flags = Flags::new();
-    flags.add(
-        Flag::new("help", FlagValue::Bool(false))
-            .shorthand('h')
-            .exclude_from_usage(),
-    );
-    flags.add(
-        Flag::new("version", FlagValue::Bool(false))
-            .shorthand('v')
-            .description("Output the current version of bop."),
-    );
-    flags.add(
-        Flag::new("host", FlagValue::String("localhost".into()))
-            .shorthand('H')
-            .description("The SSH host you want to connect to."),
-    );
-    flags.add(
-        Flag::new("dir", FlagValue::String("/srv".into()))
-            .shorthand('d')
-            .description("The directory to scan for files."),
-    );
-    flags.add(
-        Flag::new("resume", FlagValue::Bool(false))
-            .shorthand('r')
-            .description("If true, will enable resuming playback."),
-    );
-    flags.add(
-        Flag::new("disown", FlagValue::Bool(false))
-            .shorthand('D')
-            .description("If true, will run mpv and detach it from the current process."),
-    );
-    flags.add(
-        Flag::new("album", FlagValue::Bool(false))
-            .shorthand('a')
-            .description("If true, will look for media folders and play files from the selected folder in alphabetical order."),
-    );
-    flags.add(
-        Flag::new("shuffle", FlagValue::Bool(false))
-            .shorthand('s')
-            .description("If true, will shuffle an album. Only works with the --album flag."),
-    );
-    flags.add_home_config_file(".config/bop/config.json");
-    flags
-        .load(
-            &env::vars().collect(),
-            &env::args().collect::<Vec<String>>()[1..].to_vec(),
-        )
-        .expect("Failed to load flags");
-    flags
+fn merge(a: &mut Value, b: &Value) {
+    match (a, b) {
+        (Value::Object(a), Value::Object(b)) => {
+            for (k, v) in b {
+                merge(a.entry(k.clone()).or_insert(Value::Null), v);
+            }
+        }
+        (a, b) => *a = b.clone(),
+    }
+}
+
+trait Merge: DeserializeOwned + Serialize {
+    fn merge(&mut self, value: &Value) -> Result<(), serde_json::Error> {
+        let mut a = serde_json::to_value(&self)?;
+        merge(&mut a, &value);
+        *self = serde_json::from_value(a)?;
+        Ok(())
+    }
+}
+
+impl Merge for Flags {}
+
+#[derive(Parse, Deserialize, Serialize)]
+#[serde(default)]
+struct Flags {
+    #[cliconf(shorthand = 'h')]
+    help: bool,
+
+    #[cliconf(shorthand = 'v')]
+    version: bool,
+
+    #[cliconf(shorthand = 'H')]
+    host: String,
+
+    #[cliconf(shorthand = 'd')]
+    dir: String,
+
+    #[cliconf(shorthand = 'r')]
+    resume: bool,
+
+    #[cliconf(shorthand = 'D')]
+    disown: bool,
+
+    #[cliconf(shorthand = 'a')]
+    album: bool,
+
+    #[cliconf(shorthand = 's')]
+    shuffle: bool,
+}
+
+impl Default for Flags {
+    fn default() -> Self {
+        Flags {
+            help: false,
+            version: false,
+            host: "localhost".into(),
+            dir: "/srv".into(),
+            resume: false,
+            disown: false,
+            album: false,
+            shuffle: false,
+        }
+    }
 }
 
 fn main() {
-    let flags = init_flags();
+    let mut flags = Flags::default();
 
-    if flags.get_bool("version") {
+    if let Some(home_dir) = dirs::home_dir() {
+        let path = home_dir.join(".config/bop/config.json");
+        if let Ok(mut file) = File::open(path) {
+            let mut data = String::new();
+            if let Ok(_) = file.read_to_string(&mut data) {
+                flags.merge(&serde_json::from_str(&data).unwrap()).unwrap();
+            }
+        }
+    }
+
+    flags.parse_env(env::vars().collect());
+    flags.parse_args(env::args().skip(1).collect());
+
+    if flags.version {
         let version = env!("CARGO_PKG_VERSION");
         println!("bop {version}");
         return;
     }
 
-    if flags.get_bool("help") {
-        let width = match term_size::dimensions() {
-            Some((w, _)) => w,
-            None => 75,
-        };
-        cliconf::usage::generate(&flags, width, &mut io::stdout()).expect("Failed to print usage");
+    if flags.help {
+        // TODO: re-implement usage
+        // let width = match term_size::dimensions() {
+        //     Some((w, _)) => w,
+        //     None => 75,
+        // };
+        // cliconf::usage::generate(&flags, width, &mut io::stdout()).expect("Failed to print usage");
         return;
     }
 
-    let album = flags.get_bool("album");
-    let command = match album {
+    let command = match flags.album {
         true => "fd . --type directory | fzf",
         false => "fzf",
     };
 
-    let host = flags.get_string("host");
-    let dir = flags.get_string("dir");
-
     // Use fzf to locate a file
     Command::new("ssh")
-        .args(["-t", &host, &format!("cd {dir} && {command} > /tmp/bop")])
+        .args([
+            "-t",
+            &flags.host,
+            &format!("cd {} && {command} > /tmp/bop", flags.dir),
+        ])
         .status()
         .expect("SSH command failed");
 
     // Retrieve the located file
     let output = Command::new("ssh")
-        .args([&host, "cat /tmp/bop"])
+        .args([&flags.host, "cat /tmp/bop"])
         .output()
         .expect("SSH command failed");
     let path = match output.status.success() {
@@ -99,10 +127,10 @@ fn main() {
     };
 
     let mut paths = vec![];
-    if album {
+    if flags.album {
         // List the file paths in an album
         let output = Command::new("ssh")
-            .args([&host, &format!("ls \"{dir}/{path}\"")])
+            .args([&flags.host, &format!("ls \"{}/{path}\"", flags.dir)])
             .output()
             .expect("SSH command failed");
         let path_list = match output.status.success() {
@@ -115,22 +143,22 @@ fn main() {
     } else {
         paths.push(path.to_string());
     }
-    if flags.get_bool("shuffle") {
+    if flags.shuffle {
         paths.shuffle(&mut rng());
     }
     let paths = paths;
 
     let mut mpv_args: Vec<String> = paths
         .iter()
-        .map(|path| format!("sftp://{host}:{dir}/{path}"))
+        .map(|path| format!("sftp://{}:{}/{path}", flags.host, flags.dir))
         .collect();
-    mpv_args.push(match flags.get_bool("resume") {
+    mpv_args.push(match flags.resume {
         true => "--save-position-on-quit".to_string(),
         false => "--no-resume-playback".to_string(),
     });
     let mpv_args = mpv_args;
 
-    if flags.get_bool("disown") {
+    if flags.disown {
         Command::new("mpv")
             .args(mpv_args)
             .spawn()
